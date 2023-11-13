@@ -64,12 +64,5 @@ def convert_array(df, ret_var,index_columns=None, fill_value=0):
     return array, mask, index_levels, df_balanced.columns, date, stkcd
 
 
-def build_decoder_input(args, y_enc, batch, dim):
-    dec_inp = torch.zeros([batch, args.pred_length, dim]).float().to(args.device)
-    if y_enc is not None and y_enc.shape[1] > 0:
-        dec_inp = torch.cat([y_enc[:, -args.dec_len_from_input:-1, :], dec_inp], dim=1).float().to(args.device)
-    return dec_inp
-
-
 
 

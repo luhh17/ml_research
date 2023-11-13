@@ -2,27 +2,62 @@ import os
 import pickle as pkl
 import pandas as pd
 import numpy as np
-from exp.post_exp import Post_Exp
 from openpyxl import load_workbook
 import matplotlib.pyplot as plt
 from utils.post_analysis import convert_array, backtest, balance_weight, calculate_turnover, calculate_sr, calculate_port_ret, set_number_format
-from prepare_dataset.myDataset import split_signal_return_mask
-
 import pdb
 
 config_var = ['model', 'window_length', 'pred_length', 'dec_len_from_input', 'embed_dim', 'hidden_dim',
                                               'num_enc_layers', 'num_dec_layers', 'num_heads']
-adv_limit = 0.01
-adv_limit_hold = 0.05
-std_cutoff = 1
-capital_tot = 1e8
-trading_cost_rate = 0.0008
+adv_limit = args['adv_limit']
+adv_limit_hold = args['adv_limit_hold']
+std_cutoff = args['std_cutoff']
+capital_tot = args['capital_tot']
+trading_cost_rate = args['trading_cost']
 period_start='2018-01-01'
 period_end='2023-07-01'
 
+
+
+def load_pred_result(path: str) -> pd.DataFrame:
+    """
+    load prediction result for each year, and combine them into a dataframe
+    Parameters:
+        path: str
+    Returns:
+        pred_df: pd.DataFrame
+    """
+    file_list = os.listdir(path)
+    pred_file_list = [f for f in file_list if f.endswith('_pred_result')]
+    return None
+    pred_df = []
+    for pred in pred_file_list:
+        df = pd.read_pickle(f'{idx_path}/{pred}')
+        df = df.rename(columns={'weight': 'pred'})
+        pred_df.append(df)
+    pred_df = pd.concat(pred_df, axis=0)
+    if 'ret' in pred_df.columns:
+        pred_df = pred_df.drop(columns=['ret'])
+    pred_df[date_var] = pd.to_datetime(pred_df[date_var], format='%Y%m%d')
+    pred_df = pred_df[pred_df['mask'] == True]
+    pred_df = pred_df.sort_values(by=[date_var, id_var])
+    return pred_df
+
+
 # 计算ensemble模型后的结果
 def ensemble_result(path_name='ensemble_model_file', num_model=-1, strategy='bagging', date_var='date', ret_var='ret_open', id_var='stkcd',universe='top1000'):
-    
+    """
+    Calculate the result of ensemble models, automatically output to excel
+    Parameters:
+        path_name: str
+        num_model: int
+        strategy: str
+        date_var: str
+        ret_var: str
+        id_var: str
+    Returns:
+        None
+    """
     path = f'../{path_name}'
     dict_name = f'{path_name}_{universe}_res_dict.pkl'
     output_name = f'{path_name}_{universe}_result.xlsx'
@@ -31,7 +66,7 @@ def ensemble_result(path_name='ensemble_model_file', num_model=-1, strategy='bag
 
     model_name_path_dict = {model_name: os.path.join(path, model_name) for model_name in model_list}
 
-    long_port_dfs=[]
+    long_port_dfs= []
     result_dfs = []
     mean_by_year = []
     sr_by_year = []
@@ -54,63 +89,38 @@ def ensemble_result(path_name='ensemble_model_file', num_model=-1, strategy='bag
         model_idx = np.sort(os.listdir(path))
         model_idx = [m for m in model_idx if os.path.isdir(os.path.join(path, m))]
         pred_list = []
-        
         if len(model_idx) == 0:
-            model_idx = [-1]
+            continue
         for idx in model_idx:
-            if int(idx) >= num_model and num_model != -1:
-                break
-            idx_path = path
-            if model_idx[0] != -1:
-                idx_path += f'/{idx}'
-            file_list = os.listdir(idx_path)
-            pred_file_list = [f for f in file_list if f.endswith('_pred_result')]
-            if '2023_pred_result' not in pred_file_list:
-                continue
-            pred_df = []
-            for pred in pred_file_list:
-                df = pd.read_pickle(f'{idx_path}/{pred}')
-                df = df.rename(columns={'weight': 'pred'})
-                pred_df.append(df)
-            pred_df = pd.concat(pred_df, axis=0)
-            if 'ret' in pred_df.columns:
-                pred_df = pred_df.drop(columns=['ret'])
-            pred_df[date_var] = pd.to_datetime(pred_df[date_var], format='%Y%m%d')
-            pred_df = pred_df[pred_df['mask'] == True]
-            pred_df = pred_df.sort_values(by=[date_var, id_var])
+            pred_df = load_pred_result(path + f'/{idx}')
             pred = pred_df['pred'].values
             pred_list.append(pred)
-
-
         if len(pred_list) == 0:
             continue
+
         output_model_list.append(path.split('/')[-1])
         pred_list = np.array(pred_list)
         print(path.split('/')[-1])
         pred_list = np.mean(pred_list, axis=0)
         pred_df['pred'] = pred_list
-        pred_df=pred_df[(pred_df['date']>=period_start) & (pred_df['date']<=period_end)]
+        pred_df = pred_df[(pred_df['date'] >= period_start) & (pred_df['date'] <= period_end)]
         
         trading_adv_df = pd.read_pickle('/mnt/HDD16TB/backtest_data/trading_adv_info.pkl')
-        
-        if universe=='top1000':
-            trading_adv_df['year'] = trading_adv_df['date'].dt.year
-            trading_adv_df_top1000 = pd.DataFrame()
-            for year in trading_adv_df['year'].unique():
-                # Filter data for the current year
-                year_data = trading_adv_df[trading_adv_df['year'] == year]
-                first_date_of_year = year_data['date'].min()
-                year_data_first_date = year_data[year_data['date'] == first_date_of_year].copy()
-                year_data_first_date.loc[:,'mktcap_r'] = year_data_first_date['size'].rank(ascending=False, method='min')
-                top1000_universe=year_data_first_date[year_data_first_date['mktcap_r'] <= 1000]['stkcd']
-                trading_adv_df_top1000 = pd.concat([trading_adv_df_top1000, year_data[year_data['stkcd'].isin(top1000_universe)]])
-                del year_data,year_data_first_date
+        trading_adv_df['year'] = trading_adv_df['date'].dt.year
+        trading_adv_df_top1000 = pd.DataFrame()
+        for year in trading_adv_df['year'].unique():
+            # Filter data for the current year
+            year_data = trading_adv_df[trading_adv_df['year'] == year]
+            first_date_of_year = year_data['date'].min()
+            year_data_first_date = year_data[year_data['date'] == first_date_of_year].copy()
+            year_data_first_date.loc[:,'mktcap_r'] = year_data_first_date['size'].rank(ascending=False, method='min')
+            top1000_universe = year_data_first_date[year_data_first_date['mktcap_r'] <= args['test_top_n']]['stkcd']
+            trading_adv_df_top1000 = pd.concat([trading_adv_df_top1000, year_data[year_data['stkcd'].isin(top1000_universe)]])
+            del year_data,year_data_first_date
 
-            trading_adv_df=trading_adv_df_top1000.copy()
-            # trading_adv_df['mktcap_r'] = trading_adv_df.groupby('date')['size'].rank(ascending=False, method='min')
-            # trading_adv_df = trading_adv_df[trading_adv_df['mktcap_r'] <= 1000].reset_index(drop=True)
+        trading_adv_df = trading_adv_df_top1000.copy()
 
-        # return_df = pd.read_pickle('/mnt/HDD16TB/backtest_data/Ashare_Stock_return.pkl')
+
         return_df=pd.read_pickle('/mnt/HDD16TB/backtest_data/ret_decomposed.pkl')
         market_df = pd.read_pickle('/mnt/HDD16TB/backtest_data/CSI_500.pkl')
         
