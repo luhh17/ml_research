@@ -22,10 +22,8 @@ class FullAttention(nn.Module):
         _, S, _, D = values.shape
         scale = 1. / sqrt(E)
         # Batch X Head X Query_Len X Key_Len
-        # print('!!!!!!')
         scores = torch.einsum("blhe,bshe->bhls", queries, keys)
-        # print('*****')
-        # print(torch.sum(torch.isnan(scores)))
+
         if attn_mask is not None:
             scores.masked_fill_(attn_mask, -np.inf)
 
@@ -36,24 +34,12 @@ class FullAttention(nn.Module):
             Attention的形状为Batch X Head X Query_Len X Key_Len
             输出V的形状为Batch X Query_Len X Head X Embedding
             '''
-        # print(scores[0][0])
-        # tmp = scale * scores
-        # print()
-        # print(tmp.shape)
-        # print(tmp)
-        # np.save('tmp.npy', tmp.detach().cpu().numpy())
-        # print(torch.sum(torch.isnan(scores)))
-        # print(scores[0][0])
+      
         A = torch.softmax(scale * scores, dim=-1)
-        # print(A[0][0])
         A = torch.where(torch.isnan(A), torch.tensor(0.0), A)
-
-        # print(torch.sum(torch.isnan(A)))
         A = self.dropout(A)
-        # print(torch.sum(torch.isnan(A)))
-        # print(torch.sum(torch.isnan(A)))
         V = torch.einsum("bhls,bshd->blhd", A, values)
-        # print(torch.sum(torch.isnan(V)))
+
         if self.output_attention:
             return (V.contiguous(), A)
         else:

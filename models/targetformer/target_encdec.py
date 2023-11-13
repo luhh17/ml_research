@@ -13,8 +13,6 @@ class EncoderLayer(nn.Module):
         self.attention = attention
         self.conv1 = nn.Conv1d(in_channels=d_input, out_channels=d_hidden, kernel_size=1)
         self.conv2 = nn.Conv1d(in_channels=d_hidden, out_channels=d_input, kernel_size=1)
-        # self.ff1 = nn.Linear(d_input, d_hidden)
-        # self.ff2 = nn.Linear(d_hidden, d_input)
         self.norm1 = nn.LayerNorm(d_input)
         self.norm2 = nn.LayerNorm(d_input)
         self.dropout1 = nn.Dropout(dropout)
@@ -121,22 +119,13 @@ class CompressTargetEncoderLayer(nn.Module):
         #     x, x, x,
         #     attn_mask = attn_mask
         # ))
-        if self.args.target_self and self.args.target_first:
-            target = target + self.dropout(self.self_attention3(target, target, target, attn_mask=None)[0])
-            target = self.norm1(target)
+       
+        target = target + self.dropout(self.self_attention3(target, target, target, attn_mask=None)[0])
+        target = self.norm1(target)
         x = x + self.dropout(self.self_attention1(target, x, x, attn_mask=None)[0])
         y = self.norm1(x)
-        if self.args.more_self:
-            x = y
-            x = x + self.dropout(self.self_attention2(x, x, x, attn_mask=None)[0])
-            y = x = self.norm2(x)
         y = self.dropout(self.activation(self.ff1(y)))
-
         y = self.dropout(self.ff2(y))
-
-        if self.args.target_self and not self.args.target_first:
-            target = target + self.dropout(self.self_attention3(target, target, target, attn_mask=None)[0])
-            target = self.norm1(target)
 
         return self.norm3(x+y), target
 
@@ -145,32 +134,26 @@ class TargetEncoderBlock(nn.Module):
     def __init__(self, args,):
         super(TargetEncoderBlock, self).__init__()
         self.args = args
-        d_model = args.embed_dim
-        prenorm = self.args.prenorm
-        target_atten = AttentionLayer(FullAttention(mask_flag=False, attention_dropout=args.dropout, output_attention=False),
-                       d_model, args.num_heads)
-        x_self_atten = AttentionLayer(FullAttention(mask_flag=False, attention_dropout=args.dropout, output_attention=False),
-                       d_model, args.num_heads)
-        target_self_atten = AttentionLayer(FullAttention(mask_flag=False, attention_dropout=args.dropout, output_attention=False),
-                       d_model, args.num_heads)
-        self.target_encoder = TargetEncoderLayer(target_atten, d_model, d_hidden=None, dropout=args.dropout, prenorm=prenorm)
-        self.x_self_encoder = EncoderLayer(x_self_atten, d_model, d_hidden=None, dropout=args.dropout, prenorm=prenorm)
-        self.target_self_encoder = EncoderLayer(target_self_atten, d_model, d_hidden=None, dropout=args.dropout, prenorm=prenorm)
+        d_model = args['embed_dim']
+        prenorm = True
+        target_atten = AttentionLayer(FullAttention(mask_flag=False, attention_dropout=args['dropout'], output_attention=False),
+                       d_model, args['num_heads'])
+        x_self_atten = AttentionLayer(FullAttention(mask_flag=False, attention_dropout=args['dropout'], output_attention=False),
+                       d_model, args['num_heads'])
+        target_self_atten = AttentionLayer(FullAttention(mask_flag=False, attention_dropout=args['dropout'], output_attention=False),
+                       d_model, args['num_heads'])
+        self.target_encoder = TargetEncoderLayer(target_atten, d_model, d_hidden=None, dropout=args['dropout'], prenorm=prenorm)
+        self.x_self_encoder = EncoderLayer(x_self_atten, d_model, d_hidden=None, dropout=args['dropout'], prenorm=prenorm)
+        self.target_self_encoder = EncoderLayer(target_self_atten, d_model, d_hidden=None, dropout=args['dropout'], prenorm=prenorm)
         self.norm1 = torch.nn.LayerNorm(d_model)
         self.norm2 = torch.nn.LayerNorm(d_model)
 
 
     def forward(self, x, target=None, attn_mask=None):
-        # x [B, L, D]
-        # print('******')
-        if self.args.target_self and self.args.target_first:
-            target, attn = self.target_self_encoder(target, None, None)
-            # target = self.norm2(target)
+        # x [B, L, D]     
+        target, attn = self.target_self_encoder(target, None, None)
         x, attn = self.target_encoder(x, target=target, attn_mask=None)
         x, attn = self.x_self_encoder(x, None, None)
-        if self.args.target_self and not self.args.target_first:
-            target, attn = self.target_self_encoder(target, None, None)
-        # x = self.norm1(x)
         return x, target
 
 
@@ -180,39 +163,29 @@ class CausalEncoderBlock(nn.Module):
         self.args = args
         d_model = args.embed_dim
         causal_atten = AttentionLayer(
-            CausalAttention(args, mask_flag=False, attention_dropout=args.dropout, output_attention=False),
-            d_model, args.num_heads)
+            CausalAttention(args, mask_flag=False, attention_dropout=args['dropout'], output_attention=False),
+            d_model, args['num_heads'])
         x_self_atten = AttentionLayer(
-            FullAttention(mask_flag=False, attention_dropout=args.dropout, output_attention=False),
-            d_model, args.num_heads)
+            FullAttention(mask_flag=False, attention_dropout=args['dropout'], output_attention=False),
+            d_model, args['num_heads'])
         target_self_atten = AttentionLayer(
-            FullAttention(mask_flag=False, attention_dropout=args.dropout, output_attention=False),
-            d_model, args.num_heads)
-        self.target_encoder = CausalEncoderLayer(causal_atten, d_model, d_hidden=None, dropout=args.dropout)
-        self.x_self_encoder = EncoderLayer(x_self_atten, d_model, d_hidden=None, dropout=args.dropout)
-        self.target_self_encoder = EncoderLayer(target_self_atten, d_model, d_hidden=None, dropout=args.dropout)
+            FullAttention(mask_flag=False, attention_dropout=args['dropout'], output_attention=False),
+            d_model, args['num_heads'])
+        self.target_encoder = CausalEncoderLayer(causal_atten, d_model, d_hidden=None, dropout=args['dropout'])
+        self.x_self_encoder = EncoderLayer(x_self_atten, d_model, d_hidden=None, dropout=args['dropout'])
+        self.target_self_encoder = EncoderLayer(target_self_atten, d_model, d_hidden=None, dropout=args['dropout'])
         self.norm1 = torch.nn.LayerNorm(d_model)
         self.norm2 = torch.nn.LayerNorm(d_model)
 
     def forward(self, x, target=None, attn_mask=None):
         # x [B, L, D]
         # print('******')
-        if self.args.target_self and self.args.target_first:
-            target, attn = self.target_self_encoder(target, None, None)
-            target = self.norm2(target)
+    
+        target, attn = self.target_self_encoder(target, None, None)
+        target = self.norm2(target)
         x, attn = self.target_encoder(x, target=target, attn_mask=None)
         x, attn = self.x_self_encoder(x, target, None)
-        if self.args.target_self and not self.args.target_first:
-            target, attn = self.target_self_encoder(target, x, None)
-            target = self.norm2(target)
-
         x = self.norm1(x)
-
-        a = torch.sum(torch.isnan(x))
-        b = torch.sum(torch.isnan(target))
-        if a > 0 or b > 0:
-            exit()
-
         return x, target
 
 

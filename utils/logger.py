@@ -21,5 +21,5 @@ def redirect_print_to_file(file_path, print_to_terminal=False):
 
 
 def print_argparse(args):
-    for arg in vars(args):
-        print(f'{arg}: {getattr(args, arg)}')
+    for arg, value in args.items():
+        print(f'{arg}: {value}')

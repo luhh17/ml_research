@@ -1,0 +1,78 @@
+# 显卡编号, 多个显卡可以写成 "0,1,2,3"
+devices: "1"
+
+model_file_path: ""
+task_name: ""
+ensemble_num: 1
+
+# mode: "train", "infer"
+mode: "train"
+test_year_list:
+  - 2018
+  - 2019
+  # - 2020
+  # - 2021
+  # - 2022
+  # - 2023
+
+raw_data_path: "/mnt/BigHDD18T/huahao/portfolio_construction/data"
+output_dataset_path: "/mnt/BigHDD18T/huahao/portfolio_construction/data"
+model_file_path: "./../model_file"
+# 任务设定
+# 使用收益率的类型, 
+# 选项: "ret_open", "exret_open", "ret_open_3d", "ret_open_5d", "ret_open_10d", "exret_open_3d", "exret_open_5d", "exret_open_10d"
+ret_type: "exret_open"
+target_window: 3
+train_top_n: 2000
+valid_top_n: 2000
+test_top_n: 2000
+# test_start_date
+# 使用向前一共多少年的数据训练
+train_window: 5
+# 使用向前多少个月的数据作为valid
+valid_window: 6
+
+
+# loss函数：[Mse, Sharpe, MseIc]
+loss_function: "MseIc"
+corr_weight: 0.9
+window_length: 10
+pred_length: 1
+
+# 模型名称(全部小写)
+# 选项: "mlp", "rnn", "targetformer"
+model: "rnn"
+
+# 训练参数
+lr: 0.001
+batch_size: 8
+patience: 15
+epochs: 0
+optim: "adam"
+scheduler: "plateau"
+use_amp: False
+
+
+# 模型参数
+
+char_dim: 1771
+embed_dim: 64
+hidden_dim: -1
+num_enc_layers: 2
+num_heads: 4
+dropout: 0.1
+activation: "relu"
+norm_layer: "batchNorm"
+  
+
+adv_limit: 0.01
+adv_limit_hold: 0.05
+std_cutoff: 1
+capital_tot: 1e8
+trading_cost: 0.0008
+
+
+
+
+
+
