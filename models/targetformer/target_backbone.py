@@ -34,7 +34,6 @@ class TargetTransformerBackbone(nn.Module):
     def forward(self, x_enc, y_enc=None, atten_mask=None):
         enc_out = self.enc_embedding(x_enc)
         y_enc = self.y_embedding(y_enc)
-        print(y_enc.shape, enc_out.shape)
         for block in self.encoder:
             enc_out, y_enc = block(enc_out, y_enc, atten_mask)
         dec_out = enc_out

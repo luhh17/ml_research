@@ -243,9 +243,7 @@ def calculate_turnover(df, id_columns=None):
     # Calculate turnover
     turnover = abs(np.diff(bal_arr, axis=0, prepend=np.nan)).sum(axis=1)
     bc_df = pd.DataFrame(turnover, index=date_idx, columns=columns)
-    ac_df = pd.DataFrame(turnover, index=date_idx, columns=['ac_' + c for c in columns])
-    res_df = pd.concat([ac_df, bc_df], axis=1)
-    return res_df
+    return bc_df
 
 def calculate_port_ret(df, id_columns=None):
     '''
@@ -278,20 +276,12 @@ def calculate_port_ret(df, id_columns=None):
     port_exret_c2c= ((wt_arr_before * ret_c2o_arr)+(wt_arr * (ret_o2c_arr-ret_mkt_arr))).sum(axis=1)
 
     # Calculate portfolio return series
-    trading_cost = np.abs(np.concatenate([wt_arr[:1], np.diff(wt_arr, axis=0)], axis=0) * 0.0015)
-    trading_cost = np.sum(trading_cost, axis=1)
-    
-    ac_ret = port_ret_c2c - trading_cost
-    ac_df = pd.DataFrame(ac_ret, index=date_idx, columns=['ac_' + c for c in columns])
-    bc_df = pd.DataFrame(port_ret_c2c, index=date_idx, columns=columns)
-    res_df = pd.concat([ac_df, bc_df], axis=1)
 
-    ac_exret = port_exret_c2c - trading_cost
-    ac_df = pd.DataFrame(ac_exret, index=date_idx, columns=['ac_' + c for c in columns])
-    bc_df = pd.DataFrame(port_exret_c2c, index=date_idx, columns=columns)
-    exres_df = pd.concat([ac_df, bc_df], axis=1)
+    res_df = pd.DataFrame(port_ret_c2c, index=date_idx, columns=columns)
 
-    return res_df,exres_df
+    exres_df = pd.DataFrame(port_exret_c2c, index=date_idx, columns=columns)
+
+    return res_df, exres_df
 
 def max_drawdown(x,ratio=False):
     y = np.cumsum(x)
@@ -322,10 +312,8 @@ def calculate_sr(ret_series, mul_freq=250):
     
     drawdown = ret_series.apply(max_drawdown, axis=0).T
     
-
     sum_df=pd.concat([mean, std, sr,drawdown], axis=1).T
     sum_df.index=['mean', 'std', 'SR','max_dd','dd_start','dd_end']
-
     return sum_df
 
 def backtest(signal, ret, trade_limit, hold_limit, mask_buy, mask_sell, init_cap, shorting=False, market=None,
@@ -405,6 +393,8 @@ def backtest(signal, ret, trade_limit, hold_limit, mask_buy, mask_sell, init_cap
     ret_series = []
 
     # Build position
+    # print(signal.shape, limit_in.shape, mask_buy.shape, init_cap)
+    # print(signal[0], limit_in[0], mask_buy[0], init_cap)
     position_day = build_position(signal[0], limit_in[0], mask_buy[0], init_cap)
     position_day *= 1 - cost_rate
     if shorting:

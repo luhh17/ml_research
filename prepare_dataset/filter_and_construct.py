@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import pdb
-import prepare_dataset.data_organization
+from prepare_dataset.data_organization import convert_array
 import torch
 import pickle as pkl
 import sys
@@ -25,7 +25,8 @@ def split_signal_return_mask(data_array, columns, data_mask,ret_var,target_windo
 
     return input_CMat_t, input_RMat_t, input_multiRMat_t,input_IMat_t
 
-def contruct_train_valid_test(data_path, file_name, sample_start_date: str, sample_end_date: str, 
+def contruct_train_valid_test(data_path, file_name, train_start_date: str, train_end_date: str, 
+    valid_start_date: str, valid_end_date: str, test_start_date: str, test_end_date: str,
     ret_var: str, target_window, top_n: int=2000):
     """
     This function constructs the training and validation sets for the top 2000 companies based on market capitalization.
@@ -35,9 +36,8 @@ def contruct_train_valid_test(data_path, file_name, sample_start_date: str, samp
     """
 
     fea_index = pd.read_pickle(data_path+'/'+f'index.pkl')
-    sel_index = fea_index[(fea_index['date']>=train_start_date) & (fea_index['date']<=valid_end_date)].index
+    sel_index = fea_index[(fea_index['date']>=train_start_date) & (fea_index['date']<=test_end_date)].index
     data = pd.read_hdf(data_path + '/'+file_name, start=sel_index[0], stop=sel_index[-1]+1)
-    
 
     # No extreme return
     data_filter = data[np.abs(data['ret_open'])<0.25].reset_index(drop=True)
@@ -60,7 +60,7 @@ def contruct_train_valid_test(data_path, file_name, sample_start_date: str, samp
     # print(data_filter_top2000.shape)
 
     data_filter_top2000.set_index(['stkcd', 'date'], inplace=True)
-    train_array, train_mask, _, train_columns, date_matrix, stkcd_matrix = data_organization.convert_array(data_filter_top2000, ret_var)
+    train_array, train_mask, _, train_columns, date_matrix, stkcd_matrix = convert_array(data_filter_top2000, ret_var)
     signal_matrix, return_matrix, multireturn_matrix,mask_matrix = split_signal_return_mask(train_array, train_columns, train_mask,ret_var, target_window)
 
     date_matrix = date_matrix.squeeze()
@@ -69,7 +69,7 @@ def contruct_train_valid_test(data_path, file_name, sample_start_date: str, samp
 
     date_list = date_matrix[0]
     # train set
-    train_idx = (date_list >= int(sample_start_date.replace('-', ''))) & (date_list <= int(sample_end_date.replace('-', '')))
+    train_idx = (date_list >= int(train_start_date.replace('-', ''))) & (date_list <= int(train_end_date.replace('-', '')))
     train_signal = signal_matrix[:, train_idx, :]
     train_ret = return_matrix[:, train_idx]
     train_multiret=multireturn_matrix[:, train_idx]
@@ -77,29 +77,29 @@ def contruct_train_valid_test(data_path, file_name, sample_start_date: str, samp
     train_date = date_matrix[:, train_idx]
     train_stkcd = stkcd_matrix[:, train_idx]
 
-    # # validation set
-    # valid_idx = (date_list >= int(valid_start_date.replace('-', ''))) & (date_list <= int(valid_end_date.replace('-', '')))
-    # valid_signal = signal_matrix[:, valid_idx, :]
-    # valid_ret = return_matrix[:, valid_idx]
-    # valid_multiret=multireturn_matrix[:, valid_idx]
-    # valid_mask = mask_matrix[:, valid_idx]
-    # valid_date = date_matrix[:, valid_idx]
-    # valid_stkcd = stkcd_matrix[:, valid_idx]
+    # validation set
+    valid_idx = (date_list >= int(valid_start_date.replace('-', ''))) & (date_list <= int(valid_end_date.replace('-', '')))
+    valid_signal = signal_matrix[:, valid_idx, :]
+    valid_ret = return_matrix[:, valid_idx]
+    valid_multiret=multireturn_matrix[:, valid_idx]
+    valid_mask = mask_matrix[:, valid_idx]
+    valid_date = date_matrix[:, valid_idx]
+    valid_stkcd = stkcd_matrix[:, valid_idx]
 
-    # test_idx = (date_list >= int(test_start_date.replace('-', ''))) & (date_list <= int(test_end_date.replace('-', '')))
-    # test_signal = signal_matrix[:, test_idx, :]
-    # test_ret = return_matrix[:, test_idx]
-    # test_multiret = multireturn_matrix[:, test_idx]
-    # test_mask = mask_matrix[:, test_idx]
-    # test_date = date_matrix[:, test_idx]
-    # test_stkcd = stkcd_matrix[:, test_idx]
+    test_idx = (date_list >= int(test_start_date.replace('-', ''))) & (date_list <= int(test_end_date.replace('-', '')))
+    test_signal = signal_matrix[:, test_idx, :]
+    test_ret = return_matrix[:, test_idx]
+    test_multiret = multireturn_matrix[:, test_idx]
+    test_mask = mask_matrix[:, test_idx]
+    test_date = date_matrix[:, test_idx]
+    test_stkcd = stkcd_matrix[:, test_idx]
 
 
     del signal_matrix, return_matrix, multireturn_matrix, mask_matrix, date_matrix, stkcd_matrix
 
-    return train_signal, train_ret, train_multiret, train_mask, train_date, train_stkcd
-     
-
+    return (train_signal, train_ret, train_multiret, train_mask, train_date, train_stkcd), \
+    (valid_signal, valid_ret, valid_multiret, valid_mask, valid_date, valid_stkcd), \
+    (test_signal, test_ret, test_multiret, test_mask, test_date, test_stkcd)
 
 
 def return_divide_train_valid_test(train_data, valid_data, test_data, window_length):
@@ -127,15 +127,6 @@ def return_divide_train_valid_test(train_data, valid_data, test_data, window_len
 
     return new_train, new_valid, new_test
 
-# def return_divide_test(valid_data, test_data,window_length):
-#     """
-#     Calculate the lag 1 return for test sets.
-#     Simultaneously consider the window length issue and the shift issue.
-#     """
-#     test_start_idx =valid_data.shape[1]
-#     new_data = np.concatenate([valid_data, test_data], axis=1)
-#     new_test = new_data[:, test_start_idx - window_length:-1]
-#     return new_test
 
 
 def reappend_train_valid_test(train_data: torch.Tensor, 
@@ -185,14 +176,12 @@ def construct_dataset(args, test_year):
     target_window = args['target_window']
     window_length = args['window_length']
     
-    train_signal, train_1dret, train_multiret, train_mask, train_time, train_stkcd = contruct_train_valid_test(data_path, file_name, 
-    train_start_date, train_end_date, ret_var, target_window, top_n=args['train_top_n']) 
+    train, valid, test = contruct_train_valid_test(data_path, file_name, train_start_date, train_end_date, valid_start_date, valid_end_date, \
+    test_start_date, test_end_date, ret_var, target_window, top_n=args['train_top_n']) 
 
-    valid_signal, valid_1dret, valid_multiret, valid_mask, valid_time, valid_stkcd = contruct_train_valid_test(data_path, file_name, 
-    valid_start_date, valid_end_date, ret_var, target_window, top_n=args['valid_top_n']) 
-
-    test_signal, test_1dret, test_multiret, test_mask, test_time, test_stkcd = contruct_train_valid_test(data_path, file_name, 
-    test_start_date, test_end_date, ret_var, target_window, top_n=args['test_top_n'])
+    train_signal, train_1dret, train_multiret, train_mask, train_time, train_stkcd = train
+    valid_signal, valid_1dret, valid_multiret, valid_mask, valid_time, valid_stkcd = valid
+    test_signal, test_1dret, test_multiret, test_mask, test_time, test_stkcd = test
 
     fea_num = train_signal.shape[2]
 
@@ -217,9 +206,72 @@ def construct_dataset(args, test_year):
 
 
     with open(f'{output_data_path}/roll_{year}_{ret_var}_{target_window}d_{window_length}_balanced.pkl', 'wb') as file1:
-        pkl.dump((train, valid, test,fea_num), file1)
+        pkl.dump((train, valid, test, fea_num), file1)
 
 
+def construct_incremental_dataset(args, cur_date):
+    data_path = args['raw_data_path']
+    output_data_path = args['output_dataset_path']
+    file_name = 'signal_rank.h5'
+    ret_var = args['ret_type']
+    
+    cur_year = cur_date[:4]
+    cur_month = cur_date[4:6]
+    cur_day = cur_date[6:8]
+
+    if int(cur_month) <= 3 :
+        train_start_date = f"{int(cur_year)-1}-07-01"
+    else:
+        train_start_date = f"{cur_year}-01-01"
+    train_end_date = cur_date
+
+   
+    target_window = args['target_window']
+    window_length = args['window_length']
+    
+    train, valid, test = contruct_train_valid_test(data_path, file_name, train_start_date, train_end_date, train_start_date, train_end_date, \
+    train_start_date, train_end_date, ret_var, target_window, top_n=1e9) 
+
+    train_signal, train_1dret, train_multiret, train_mask, train_time, train_stkcd = train
+    valid_signal, valid_1dret, valid_multiret, valid_mask, valid_time, valid_stkcd = valid
+    test_signal, test_1dret, test_multiret, test_mask, test_time, test_stkcd = test
+
+
+    fea_num = train_signal.shape[2]
+
+    if window_length > 1:
+        train_signal, valid_signal, test_signal = reappend_train_valid_test(train_signal, valid_signal, test_signal, window_length)
+       
+        train_multiret, valid_multiret, test_multiret = reappend_train_valid_test(train_multiret, valid_multiret, test_multiret, window_length)
+
+        train_mask, valid_mask, test_mask = reappend_train_valid_test(train_mask, valid_mask, test_mask, window_length) 
+
+        train_time, valid_time, test_time = reappend_train_valid_test(train_time, valid_time, test_time, window_length)
+
+        train_stkcd, valid_stkcd, test_stkcd = reappend_train_valid_test(train_stkcd, valid_stkcd, test_stkcd, window_length)
+
+    # construct the lag 1 return, note that, we use 1dret to construct the lag 1 return,because if we use the multi-day return, this will lead to future info leakage problem.
+    train_lret, valid_lret, test_lret = return_divide_train_valid_test(train_1dret, valid_1dret, test_1dret, window_length)
+    # full_test_lret = return_divide_test(full_valid_1dret, full_test_1dret, window_length)
+
+    train = (train_signal, train_multiret, train_lret, train_mask, train_time, train_stkcd)
+    valid = (valid_signal, valid_multiret, valid_lret, valid_mask, valid_time, valid_stkcd)
+    test = (test_signal, test_multiret, test_lret, test_mask, test_time, test_stkcd)
+
+
+    with open(f'{output_data_path}/incremental_{cur_date}_{ret_var}_{target_window}d_{window_length}.pkl', 'wb') as file1:
+        pkl.dump((train, valid, test, fea_num), file1)
+
+
+def check_incremental_data_exist(args: dict, cur_date: str) -> None:
+    """
+    Check if data file exists, if not, create them
+    """
+    
+    path = f"{args['output_dataset_path']}/incremental_{cur_date}_{args['ret_type']}_{args['target_window']}d_{args['window_length']}.pkl"
+    if not os.path.exists(path):
+        construct_incremental_dataset(args, test_year)
+    return
 
 
 if __name__ == '__main__':

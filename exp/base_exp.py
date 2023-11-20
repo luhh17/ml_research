@@ -23,14 +23,15 @@ import pdb
 
 
 class BaseExp(object):
-    def __init__(self, args: dict[str, int], test_year: int) -> None:
+    def __init__(self, args: dict[str, int], test_year: int, test_data: list=None) -> None:
         self.args = args
-        # print(self.args['model_file_path'])
         self.device = self._acquire_device()
         self.test_year = test_year
-        self._get_data(test_year)
+        if not test_data:
+            self._get_data(test_year)
         self.model = self._build_model().to(self.device)
         self.save_path = f"{self.args['model_file_path']}/{test_year}_checkpoint.pt"
+        self.test_data = test_data
 
     def save_args(self) -> None:
         pkl.dump(self.args, open(f"{self.args['model_file_path']}/config", 'wb'))
@@ -48,7 +49,7 @@ class BaseExp(object):
             # if self.args.mode=='dualnet':
             #     model = MLP_linear_concat(self.args, out_dim=self.args.pred_length)
             # else:
-            model = Mlp3D(self.args, out_dim=self.args.pred_length)
+            model = Mlp3D(self.args, out_dim=self.args['pred_length'])
         if len(self.device_ids) > 1:
             model = torch.nn.DataParallel(model, device_ids=self.device_ids)
         return model
@@ -73,7 +74,6 @@ class BaseExp(object):
         print(f'loading data {test_year}')
         train, valid, test, basic_fea_num = pkl.load(open(f"{self.args['output_dataset_path']}/roll_{test_year}_{self.args['ret_type']}_{self.args['target_window']}d_{self.args['window_length']}_balanced.pkl", 'rb'))
         self.args['char_dim'] = basic_fea_num
-            
         train_dataset = BalancedDataset(train, self.args, match_stkcd_date=False)
         valid_dataset = BalancedDataset(valid, self.args, match_stkcd_date=False)    
         test_dataset = BalancedDataset(test, self.args, match_stkcd_date=True)
@@ -89,6 +89,7 @@ class BaseExp(object):
         del train_dataset, valid_dataset, test_dataset
         print('loading data done!')
         self.train_loader, self.valid_loader, self.test_loader = train_loader, valid_loader, test_loader
+        return
 
 
     def _select_optimizer(self) -> torch.optim.Optimizer:
@@ -98,7 +99,7 @@ class BaseExp(object):
             return torch.optim.SGD(self.model.parameters(), lr=self.args['lr'])
 
 
-    def reform_batch_test_res(self, preds, data, mask):
+    def form_batch_test_res(self, preds, data, mask):
         """
         Reformat and save the test result
         Parameters:
@@ -194,8 +195,9 @@ class BaseExp(object):
         total_loss = np.average(total_loss)
         if mode == 'test':
             df = pd.concat(df_list)
-            df.to_pickle(f"{self.args['model_file_path']}/{self.test_year}_pred_result", )
+            return df
         return total_loss
+
 
     def train(self):
         train_steps = len(self.train_loader)
@@ -227,14 +229,7 @@ class BaseExp(object):
         self.model.load_state_dict(torch.load(self.save_path))
         self.model.eval()
         with torch.no_grad():
-            self.process_one_epoch(self.test_loader, mode='test')
-        return self.model
-
-
-    def inference(self):
-        self.model.load_state_dict(torch.load(self.save_path))
-        self.model.eval()
-        with torch.no_grad():
-            self.process_one_epoch(self.test_loader, mode='test')
+            df = self.process_one_epoch(self.test_loader, mode='test')
+            df.to_pickle(f"{self.args['model_file_path']}/{self.test_year}_pred_result", )
         return self.model
 

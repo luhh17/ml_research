@@ -1,0 +1,13 @@
+report_output_path: "./../report"
+model_path: "./../model_file"
+backtest_data_path: "./../data_annual_1113"
+
+period_start: "2018-01-01"
+period_end: "2023-07-01"
+
+test_topn: 2000
+adv_limit: 0.01
+adv_limit_hold: 0.05
+std_cutoff: 1
+capital_tot: 1e8
+trading_cost: 0.0008

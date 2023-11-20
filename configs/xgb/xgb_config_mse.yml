@@ -1,5 +1,5 @@
 # 显卡编号, 多个显卡可以写成 "0,1,2,3"
-devices: "1"
+devices: "2"
 
 model_file_path: ""
 task_name: ""
@@ -10,14 +10,15 @@ mode: "train"
 test_year_list:
   - 2018
   - 2019
-  # - 2020
-  # - 2021
-  # - 2022
-  # - 2023
+  - 2020
+  - 2021
+  - 2022
+  - 2023
 
-raw_data_path: "/mnt/BigHDD18T/huahao/portfolio_construction/data"
-output_dataset_path: "/mnt/BigHDD18T/huahao/portfolio_construction/data"
-model_file_path: "./../model_file"
+raw_data_path: "/mnt/BigHDD18T/huahao/productive_ml/data_annual_1113"
+output_dataset_path: "/mnt/BigHDD18T/huahao/productive_ml/data_annual_1113"
+model_file_root_path: "./../model_file"
+
 # 任务设定
 # 使用收益率的类型, 
 # 选项: "ret_open", "exret_open", "ret_open_3d", "ret_open_5d", "ret_open_10d", "exret_open_3d", "exret_open_5d", "exret_open_10d"
@@ -34,20 +35,20 @@ valid_window: 6
 
 
 # loss函数：[Mse, Sharpe, MseIc]
-loss_function: "MseIc"
+loss_function: "Mse"
 corr_weight: 0.9
-window_length: 10
+window_length: 20
 pred_length: 1
 
 # 模型名称(全部小写)
 # 选项: "mlp", "rnn", "targetformer"
-model: "rnn"
+model: "xgb"
 
 # 训练参数
 lr: 0.001
 batch_size: 8
 patience: 15
-epochs: 0
+epochs: 150
 optim: "adam"
 scheduler: "plateau"
 use_amp: False
@@ -55,14 +56,14 @@ use_amp: False
 
 # 模型参数
 
-char_dim: 1771
-embed_dim: 64
-hidden_dim: -1
-num_enc_layers: 2
-num_heads: 4
-dropout: 0.1
-activation: "relu"
-norm_layer: "batchNorm"
+max_depth: 4
+n_estimators: 100
+max_leaves: 0
+max_bin: 32
+learning_rate: 0.1
+gamma: 1
+reg_lambda: 1
+reg_alpha: 1
   
 
 adv_limit: 0.01

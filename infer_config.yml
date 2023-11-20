@@ -1,0 +1,13 @@
+config_list:
+  - ./configs/rnn/rnn_config_mse.yml
+  - ./configs/mlp/mlp_config_mse.yml
+  - ./configs/targetformer/targetformer_config_mse.yml
+
+  - ./configs/rnn/rnn_config.yml
+  - ./configs/mlp/mlp_config.yml
+  - ./configs/targetformer/targetformer_config.yml
+
+devices: 0
+epochs: 5
+lr: 0.0001
+cur_date: 2023-11-17
